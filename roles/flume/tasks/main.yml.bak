@@ -1,0 +1,59 @@
+---
+- name: 获取flume进程状态
+  shell: ps -ef|grep org.apache.flume.node.Application|grep -v grep
+  register: flume_process_info
+
+- name: 根据flume进程状态获取lib目录
+  shell: echo "{{ flume_process_info.stdout_lines }}"
+  register: lib_result
+  when: flume_process_info.rc  ==  0 and flume_process_info.stdout_lines != ""
+
+- set_fact:
+    lib_dir: "{{ lib_result.stdout | regex_search(regexp,'\\1') }}"
+  vars:
+    regexp: '.*conf:(.*)/\*:/.*'
+
+- debug:
+    var: lib_dir
+
+- set_fact:
+    pre_lib_dir: "{{ lib_result.stdout | regex_search(regexp,'\\1') }}"
+  vars:
+    regexp: '.*conf:(.*)/lib/\*:/.*'
+
+- debug:
+    var: pre_lib_dir
+
+#- name: 获取上级lib上级目录
+#  shell: echo {{ lib_dir[0] }}
+#  register: pre_lib_dir
+#  when: lib_dir[0] != ""
+#- debug:
+#   var: pre_lib_dir
+
+- name: 创建备份目录
+  file: dest={{ pre_lib_dir[0] }}/bak state=directory
+  when: pre_lib_dir[0] != ""
+
+- name: 检查jackson-core-xxx.jar文件是否存在
+  shell: ls {{ lib_dir[0] }}/jackson-core-*.jar | grep -v jackson-core-asl
+  register: jackson_core_jar
+  ignore_errors: true
+
+- name: 移动jackson-core-xxx.jar文件
+  #copy: src={{ jackson_core_jar.stdout }} dest={{ pre_lib_dir[0] }}/bak remote_src=yes
+  shell: mv {{ jackson_core_jar.stdout }} 
+  when: jackson_core_jar.rc == 0
+#- name: 备份lib文件
+#  #command: mv {{ lib_dir[0] }}/jackson-core-*.jar  {{ lib_dir[0] }}/jackson-annotations-*.jar  {{ lib_dir[0] }}/jackson-databind-*.jar "{{ pre_lib_dir[0] }}/bak"
+#  copy:  src={{ lib_dir[0] }}/{{ item }} dest={{ pre_lib_dir[0] }}/bak
+#  with_fileglob:
+#    - "{{ lib_dir[0] | dirname }}/jackson-databind-*.jar"
+#  when: lib_dir[0] != ""
+#- name: 更新lib包
+#  copy: src={{ item.src }} dest={{ item.dest }}
+#  with_items:
+#    - { src: 'noskcaj-annotations-2.13.3.jar',dest: '{{ lib_dir.stdout_lines }}' }
+#    - { src: 'noskcaj-core-2.13.3.jar',dest: '{{ lib-dir.stdout_lines }}' }
+#    - { src: 'noskcaj-databind-2.13.3.jar',dest: '{{ lib-dir.stdout_lines }}' }
+ 

@@ -1,0 +1,8 @@
+---
+- hosts: aliyun
+  gather_facts: False
+  tasks:
+    - name: yum update polkit service
+      yum:
+        name: polkit
+        state: latest

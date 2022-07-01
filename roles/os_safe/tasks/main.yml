@@ -1,0 +1,120 @@
+---
+- name: set authentication rules no.1
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "{{ item.regexp_string }}"
+    line: "{{ item.rule }}"
+    backup: yes
+  with_items:
+    - { regexp_string: "^PASS_MAX_DAYS", rule: "PASS_MAX_DAYS   90" }
+    - { regexp_string: "^PASS_MIN_DAYS", rule: "PASS_MIN_DAYS   60" }
+    - { regexp_string: "^PASS_MIN_LEN", rule: "PASS_MIN_LEN   12" }
+    - { regexp_string: "^PASS_WARN_AGE", rule: "PASS_WARN_AGE   14" }
+  tags: os_safe
+
+#- name: update /etc/pam.d/system-auth
+#  shell: sed -i 's/password    requisite     pam_pwquality.so try_first_pass local_users_only/#&/' /etc/pam.d/system-auth;sed -i '/#%PAM-1.0/a password    requisite     pam_pwquality.so try_first_pass local_users_only retry=5 minlen=12 Difok=3 dcredit=-1 ucredit=-1 lcredit=-1  ocredit=-1' /etc/pam.d/system-auth;sed -i '/#%PAM-1.0/a auth        required     pam_tally2.so  onerr=failed deny=5 unlock_time=1800 even_deny_root root_unlock_time=1800' /etc/pam.d/system-auth
+#  tags: os_safe
+- name: add contents for  match lines of /etc/pam.d/system-auth
+  lineinfile: 
+    path: /etc/pam.d/system-auth
+    insertafter: '^#%PAM-1.0$'
+    line: "{{ item }}"
+    state: present
+    backup: yes
+  with_items:
+    - password    requisite     pam_pwquality.so try_first_pass local_users_only retry=5 minlen=12 Difok=3 dcredit=-1 ucredit=-1 lcredit=-1  ocredit=-1
+    - auth        required     pam_tally2.so  onerr=failed deny=5 unlock_time=1800 even_deny_root root_unlock_time=1800
+  tags: os_safe
+
+- name: annotation the match lines of /etc/pam.d/system-auth
+  replace:
+    path: /etc/pam.d/system-auth
+    regexp: '^password    requisite     pam_pwquality.so try_first_pass local_users_only retry=3 authtok_type='
+    replace: '#password    requisite     pam_pwquality.so try_first_pass local_users_only retry=3 authtok_type='
+    backup: yes
+  tags: os_safe
+
+
+- name: update /etc/pam.d/sshd
+  lineinfile: 
+    path: /etc/pam.d/sshd
+    insertafter: '^#%PAM-1.0'
+    line: auth        required     pam_tally2.so  onerr=failed deny=5 unlock_time=1800 even_deny_root root_unlock_time=900
+    state: present
+    backup: yes
+  tags: os_safe
+
+- name: update /etc/profile
+  lineinfile: 
+    path: /etc/profile
+    line: "{{ item }}"
+    backup: yes
+  with_items:
+    - TMOUT=900
+    - export TOMOUT
+    - export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S" 
+    - export HISTSIZE=3000
+    - export PROMPT_COMMAND="history -a"
+  tags: os_safe
+
+- name: delete os user
+  user:
+    name: "{{ item }}"
+    state: absent
+    remove: yes
+  with_items:
+    - tencent
+    - tj
+
+- name: stop common os services
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  with_items:
+    - postfix
+    - rpcbind.service
+    - rpcbind.socket
+    - cups.service
+    - cups.socket
+    - rhel-domainname
+    - libvirtd
+    - telnet.socket
+    - gdm
+  ignore_errors: true
+
+- name: stop other os service
+  shell: systemctl set-default multi-user.target;ps -ef|grep dnsmasq | grep -v grep|awk -F '[ ]+' '{print $2}' | xargs echo|xargs kill -9
+  ignore_errors: true
+
+- name: create cron file directory
+  file:
+    path: "/data/OSLogs"
+    state: directory
+    
+- name: copy cron files to remote server
+  copy:
+    src: files/{{ item }}
+    dest: /data/OSLogs
+    mode: 755
+  with_items:
+    - OSLog_bak.sh
+    - OSLog_bak_del.sh
+
+- name: add bak os logs cron jobs
+  cron:
+    name:  add the cron plan of backup os logs
+    minute: "0"
+    hour: "2"
+    job: "sh /data/OSLogs/OSLog_bak.sh >/dev/null 2>&1 &"
+    backup: yes
+
+- name: add del os logs cron jobs
+  cron:
+    name: add the cron plan for  del backup of os logs
+    minute: "0"
+    hour: "2"
+    weekday: "6"
+    job: "sh /data/OSLogs/OSLog_bak_del.sh >/dev/null 2>&1 &"
+    backup: yes

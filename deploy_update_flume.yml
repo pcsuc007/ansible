@@ -1,0 +1,7 @@
+---
+- name: 更新flume包
+  gather_facts: false
+  hosts: aliyun
+  roles:
+    - flume
+  tags: flume

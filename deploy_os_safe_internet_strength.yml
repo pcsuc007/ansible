@@ -1,0 +1,7 @@
+---
+- name: os安全加固
+  gather_facts: false
+  hosts: internet
+  roles:
+    - os_safe
+  tags: os_safe
